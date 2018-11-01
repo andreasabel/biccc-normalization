@@ -83,10 +83,12 @@ mutual
 
 -- Semantics of types and contexts.
 
-⟦_⟧ ⟦_⟧' : Ty → Cxt → Set
-⟦ A     ⟧  Γ = Ne Γ A ⊎ ⟦ A ⟧' Γ
-⟦ o     ⟧' Γ = ⊥
-⟦ A ⇒ B ⟧' Γ = ∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ
+⟦_⟧ : Ty → Cxt → Set
+⟦ A ⟧ Γ = Ne Γ A ⊎ Val A
+  where
+  Val : Ty → Set
+  Val o       = ⊥
+  Val (A ⇒ B) = ∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ
 
 ⟦_⟧G : (Φ Γ : Cxt) → Set
 ⟦ []    ⟧G Γ = ⊤
@@ -111,14 +113,12 @@ monG ρ {A ∷ Φ} (γ , a) = monG ρ γ , mon ρ a
 
 -- Reflection and reification.
 
-mutual
-  reflect : ∀{A} → Ne Γ A → ⟦ A ⟧ Γ
-  reflect t = inj₁ t
+pattern reflect t = inj₁ t
 
-  reify : ∀{A} → ⟦ A ⟧ Γ → Nf Γ A
-  reify             (inj₁ t) = ne t
-  reify {A = B ⇒ C} (inj₂ f) = abs (reify (f (wk id) (reflect (var vz))))
-  reify {A = o}     (inj₂ ())
+reify : ∀{A} → ⟦ A ⟧ Γ → Nf Γ A
+reify             (inj₁ t) = ne t
+reify {A = B ⇒ C} (inj₂ f) = abs (reify (f (wk id) (reflect (var vz))))
+reify {A = o}     (inj₂ ())
 
 -- Application and evaluation.
 
