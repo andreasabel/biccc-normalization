@@ -46,14 +46,14 @@ mutual
     app : (t : Ne Γ (A ⇒ B)) (u : Nf Γ A) → Ne Γ B
 
   data Nf Γ : Ty → Set where
-    ne : (t : Ne Γ A) → Nf Γ A
+    ne  : (t : Ne Γ A) → Nf Γ A
     abs : (t : Nf (A ∷ Γ) B) → Nf Γ (A ⇒ B)
 
 -- Category of order-preserving embeddings (renamings).
 
 data _≤_ : (Γ Δ : Cxt) → Set where
-  id : Γ ≤ Γ
-  wk : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ Δ
+  id   : Γ ≤ Γ
+  wk   : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ Δ
   lift : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ (A ∷ Δ)
 
 _•_ : (ρ : Γ ≤ Φ) (ρ' : Δ ≤ Γ) → Δ ≤ Φ
@@ -77,7 +77,7 @@ mutual
   monNe ρ (app t u) = app (monNe ρ t) (monNf ρ u)
 
   monNf : (ρ : Δ ≤ Γ) → Nf Γ A → Nf Δ A
-  monNf ρ (ne t) = ne (monNe ρ t)
+  monNf ρ (ne t)  = ne  (monNe ρ t)
   monNf ρ (abs t) = abs (monNf (lift ρ) t)
 
 -- Semantics of types and contexts.
@@ -87,13 +87,13 @@ mutual
 ⟦ A ⇒ B ⟧ Γ = Ne Γ (A ⇒ B) ⊎ (∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ)
 
 ⟦_⟧G : (Φ Γ : Cxt) → Set
-⟦ [] ⟧G Γ = ⊤
+⟦ []    ⟧G Γ = ⊤
 ⟦ A ∷ Φ ⟧G Γ = ⟦ Φ ⟧G Γ × ⟦ A ⟧ Γ
 
 -- Variables are projections.
 
 ⦅_⦆v : Var Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
-⦅ vz ⦆v = proj₂
+⦅ vz   ⦆v = proj₂
 ⦅ vs x ⦆v = ⦅ x ⦆v ∘ proj₁
 
 -- Semantic types and contexts are presheaves.
@@ -104,7 +104,7 @@ mon ρ {A ⇒ B} (inj₁ t) = inj₁ (monNe ρ t)
 mon ρ {A ⇒ B} (inj₂ f) = inj₂ λ ρ' → f (ρ • ρ')
 
 monG : (ρ : Δ ≤ Γ) → ∀{Φ} → ⟦ Φ ⟧G Γ → ⟦ Φ ⟧G Δ
-monG ρ {[]} _ = _
+monG ρ {[]}    _       = _
 monG ρ {A ∷ Φ} (γ , a) = monG ρ γ , mon ρ a
 
 -- Reflection and reification.
@@ -128,8 +128,8 @@ apply c a = case c of λ where
   (inj₂ f) → f id a
 
 ⦅_⦆ : Tm Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
-⦅ var x ⦆ γ = ⦅ x ⦆v γ
-⦅ abs t ⦆ γ = inj₂ (λ ρ a → ⦅ t ⦆( monG ρ γ , a ))
+⦅ var x ⦆   γ = ⦅ x ⦆v γ
+⦅ abs t ⦆   γ = inj₂ (λ ρ a → ⦅ t ⦆( monG ρ γ , a ))
 ⦅ app t u ⦆ γ = apply (⦅ t ⦆ γ) (⦅ u ⦆ γ)
 
 -- Identity environment.
