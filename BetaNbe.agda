@@ -7,7 +7,6 @@ open import Data.Empty using (⊥)
 open import Data.List using (List; []; _∷_)
 open import Data.List.Any using (here; there)
 open import Data.List.Membership.Propositional using (_∈_)
-open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Unit using (⊤)
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
 
@@ -81,14 +80,20 @@ mutual
   monNf ρ (ne t)  = ne  (monNe ρ t)
   monNf ρ (abs t) = abs (monNf (lift ρ) t)
 
--- Semantics of types and contexts.
+-- Semantics of types.
+
+data _⊎̂_ (A B : Set) : Set where
+  ne  : (t : A) → A ⊎̂ B
+  val : (f : B) → A ⊎̂ B
 
 ⟦_⟧ : Ty → Cxt → Set
-⟦ A ⟧ Γ = Ne Γ A ⊎ Val A
+⟦ A ⟧ Γ = Ne Γ A ⊎̂ Val A
   where
   Val : Ty → Set
   Val o       = ⊥
   Val (A ⇒ B) = ∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ
+
+-- Semantics of contexts.
 
 ⟦_⟧G : (Φ Γ : Cxt) → Set
 ⟦ []    ⟧G Γ = ⊤
@@ -103,40 +108,37 @@ mutual
 -- Semantic types and contexts are presheaves.
 
 mon  : (ρ : Δ ≤ Γ) → ∀{A} → ⟦ A ⟧  Γ → ⟦ A ⟧  Δ
-mon ρ         (inj₁ t) = inj₁ (monNe ρ t)
-mon ρ {A ⇒ B} (inj₂ f) = inj₂ λ ρ' → f (ρ • ρ')
-mon ρ {o}     (inj₂ ())
+mon ρ         (ne  t) = ne (monNe ρ t)
+mon ρ {A ⇒ B} (val f) = val λ ρ' → f (ρ • ρ')
+mon ρ {o}     (val ())
 
 monG : (ρ : Δ ≤ Γ) → ∀{Φ} → ⟦ Φ ⟧G Γ → ⟦ Φ ⟧G Δ
 monG ρ {[]}    _       = _
 monG ρ {A ∷ Φ} (γ , a) = monG ρ γ , mon ρ a
 
--- Reflection and reification.
-
-pattern reflect t = inj₁ t
+-- Reification.
 
 reify : ∀{A} → ⟦ A ⟧ Γ → Nf Γ A
-reify             (inj₁ t) = ne t
-reify {A = B ⇒ C} (inj₂ f) = abs (reify (f (wk id) (reflect (var vz))))
-reify {A = o}     (inj₂ ())
+reify             (ne  t) = ne t
+reify {A = B ⇒ C} (val f) = abs (reify (f (wk id) (ne (var vz))))
+reify {A = o}     (val ())
 
 -- Application and evaluation.
 
 apply : ⟦ A ⇒ B ⟧ Γ → ⟦ A ⟧ Γ → ⟦ B ⟧ Γ
-apply c a = case c of λ where
-  (inj₁ t) → reflect (app t (reify a))
-  (inj₂ f) → f id a
+apply (ne t) a = ne (app t (reify a))
+apply (val f) a = f id a
 
 ⦅_⦆ : Tm Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
 ⦅ var x ⦆   γ = ⦅ x ⦆v γ
-⦅ abs t ⦆   γ = inj₂ (λ ρ a → ⦅ t ⦆( monG ρ γ , a ))
+⦅ abs t ⦆   γ = val λ ρ a → ⦅ t ⦆( monG ρ γ , a )
 ⦅ app t u ⦆ γ = apply (⦅ t ⦆ γ) (⦅ u ⦆ γ)
 
 -- Identity environment.
 
 env : ∀{Γ} (ρ : Δ ≤ Γ) → ⟦ Γ ⟧G Δ
 env {Γ = []}    ρ = _
-env {Γ = A ∷ Γ} ρ = env (wk id • ρ) , reflect (var (monVar ρ vz))
+env {Γ = A ∷ Γ} ρ = env (wk id • ρ) , ne (var (monVar ρ vz))
 
 -- Normalization.
 
