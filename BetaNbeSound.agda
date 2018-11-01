@@ -6,6 +6,7 @@
 {-# OPTIONS --rewriting #-}
 
 open import Data.List using (List; []; _∷_)
+open import Data.List.All using (All; []; _∷_; lookup)
 open import Data.List.Any using (here; there)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.Sum using (_⊎_; inj₁; inj₂)
@@ -101,8 +102,31 @@ monTm-comp         {t = app t u} = cong₂ app monTm-comp monTm-comp
 
 -- Substitution.
 
+_⊢_  : (Γ Δ : Cxt) → Set
+Γ ⊢ Δ = All (λ A → Tm A Γ) Δ
+
+monSub : Mon (_⊢ Φ)
+monSub ρ [] = []
+monSub ρ (t ∷ σ) = monTm ρ t ∷ monSub ρ σ
+
+-- data Sub : (Φ Γ : Cxt) → Set where
+--   [] : Sub [] Γ
+--   _∷_ : Tm A Γ → Sub Φ Γ → Sub (A ∷ Φ) Γ
+
+liftS : Γ ⊢ Δ → (A ∷ Γ) ⊢ (A ∷ Δ)
+liftS σ = var vz ∷ monSub (wk id) σ
+
+idS : Γ ⊢ Γ
+idS {[]} = []
+idS {Γ = A ∷ Γ} = liftS idS
+
+subst : Γ ⊢ Δ → Tm A Δ → Tm A Γ
+subst σ (var x)   = lookup σ x
+subst σ (abs t)   = abs (subst (liftS σ) t)
+subst σ (app t u) = app (subst σ t) (subst σ u)
+
 subst1 : Tm B (A ∷ Γ) → Tm A Γ → Tm B Γ
-subst1 = {!!}
+subst1 t u = subst (u ∷ idS) t
 
 -- Definitional equality.
 
@@ -153,7 +177,7 @@ mutual
 --   monNf ρ (ne t)  = ne (monNe ρ t)
 --   monNf ρ (abs t) = abs (monNf (lift ρ) t)
 
--- Semantics of types and contexts.
+-- Neutral and normal up to conversion.
 
 record NE {A Γ} (t : Tm A Γ) : Set where
   constructor mkNE
@@ -169,18 +193,40 @@ record NF {A Γ} (t : Tm A Γ) : Set where
     n    : Nf t′
     eq   : Eq t′ t
 
-VAL : ∀ A {Γ} → Tm A Γ → Set
-VAL o           t = NE t
-VAL (B ⇒ C) {Γ} t = NE t ⊎
-  ∀{Δ} (ρ : Δ ≤ Γ) {u : Tm B Δ} (a : VAL B u) → VAL C (app (monTm ρ t) u)
+-- Constructions on NF.
 
--- Conversion of semantics.
+neNF : NE t → NF t
+neNF (mkNE n eq) = mkNF (ne n) eq
+
+absNF : NF t → NF (abs t)
+absNF (mkNF n eq) = mkNF (abs n) (abs eq)
+
+-- Conversion and monotonicity.
 
 convNE : Eq t t' → NE t → NE t'
 convNE eq (mkNE n eq') = mkNE n (trans eq' eq)
 
 convNF : Eq t t' → NF t → NF t'
 convNF eq (mkNF n eq') = mkNF n (trans eq' eq)
+
+monNE : NE t → NE (monTm ρ t)
+monNE (mkNE n eq) = mkNE (monNe n) (monEq eq)
+
+monNF : NF t → NF (monTm ρ t)
+monNF (mkNF n eq) = mkNF (monNf n) (monEq eq)
+
+-- Semantics of types and contexts.
+
+VAL : ∀ A {Γ} → Tm A Γ → Set
+VAL o           t = NE t
+VAL (B ⇒ C) {Γ} t = NE t ⊎
+  ∀{Δ} (ρ : Δ ≤ Γ) {u : Tm B Δ} (a : VAL B u) → VAL C (app (monTm ρ t) u)
+
+ENV : Γ ⊢ Φ → Set
+ENV [] = ⊤
+ENV (t ∷ σ) = ENV σ × VAL _ t
+
+-- Conversion of semantics.
 
 convVAL : Eq t t' → VAL A t → VAL A t'
 convVAL {A = o}     eq t        = convNE eq t
@@ -189,59 +235,38 @@ convVAL {A = _ ⇒ _} eq (inj₂ f) = inj₂ λ ρ a → convVAL (appl (monEq eq
 
 -- Monotonicity of semantics.
 
-monNE : NE t → NE (monTm ρ t)
-monNE (mkNE n eq) = mkNE (monNe n) (monEq eq)
-
-monNF : NF t → NF (monTm ρ t)
-monNF (mkNF n eq) = mkNF (monNf n) (monEq eq)
-
 monVAL : VAL A t → VAL A (monTm ρ t)
 monVAL {o} t = monNE t
 monVAL {A ⇒ B} (inj₁ t) = inj₁ (monNE t)
 monVAL {A ⇒ B} {ρ = ρ} (inj₂ f) = inj₂ λ ρ' a → f (ρ' • ρ) a
   -- REWRITE monTm-comp
 
-{-
-⟦_⟧ : Ty → Cxt → Set
-⟦ o     ⟧ Γ = Ne Γ o
-⟦ A ⇒ B ⟧ Γ = Ne Γ (A ⇒ B) ⊎ (∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ)
+variable
+  σ : Δ ⊢ Γ
 
-{-
-
-⟦_⟧G : (Φ Γ : Cxt) → Set
-⟦ [] ⟧G Γ = ⊤
-⟦ A ∷ Φ ⟧G Γ = ⟦ Φ ⟧G Γ × ⟦ A ⟧ Γ
+monENV : ENV σ → ENV (monSub ρ σ)
+monENV {σ = []}    _       = _
+monENV {σ = t ∷ σ} (γ , v) = monENV γ , monVAL v
 
 -- Variables are projections.
 
-⦅_⦆v : Var Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
-⦅ vz ⦆v = proj₂
-⦅ vs x ⦆v = ⦅ x ⦆v ∘ proj₁
-
--- Semantic types and contexts are presheaves.
-
-mon : (ρ : Δ ≤ Γ) → ∀{A} → ⟦ A ⟧ Γ → ⟦ A ⟧ Δ
-mon ρ {o} t = monNe ρ t
-mon ρ {A ⇒ B} (inj₁ t) = inj₁ (monNe ρ t)
-mon ρ {A ⇒ B} (inj₂ f) = inj₂ λ ρ' → f (ρ • ρ')
-
-monG : (ρ : Δ ≤ Γ) → ∀{Φ} → ⟦ Φ ⟧G Γ → ⟦ Φ ⟧G Δ
-monG ρ {[]} _ = _
-monG ρ {A ∷ Φ} (γ , a) = monG ρ γ , mon ρ a
+lookupEnv : (x : Var A Γ) → ENV σ → VAL A (lookup σ x)
+lookupEnv {σ = t ∷ σ} (vz)   = proj₂
+lookupEnv {σ = t ∷ σ} (vs x) = lookupEnv x ∘ proj₁
 
 -- Reflection and reification.
 
 mutual
-  reflect : ∀{A} → Ne Γ A → ⟦ A ⟧ Γ
+  reflect : NE t → VAL A t
   reflect {A = o}     t = t
   reflect {A = _ ⇒ _} t = inj₁ t
 
-  reify : ∀{A} → ⟦ A ⟧ Γ → Nf Γ A
-  reify {A = o} t = ne t
+  reify : VAL A t → NF t
+  reify {A = o} t = neNF t
   reify {A = B ⇒ C} a = case a of λ where
-    (inj₁ t) → ne t
-    (inj₂ f) → abs (reify (f (wk id) (reflect (var vz))))
-
+    (inj₁ t) → neNF t
+    (inj₂ f) → {! absNF {! (reify (f (wk id) (reflect (var vz)))) !} !}
+{-
 -- Application and evaluation.
 
 apply : ⟦ A ⇒ B ⟧ Γ → ⟦ A ⟧ Γ → ⟦ B ⟧ Γ
