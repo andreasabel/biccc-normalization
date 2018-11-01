@@ -3,6 +3,7 @@
 
 -- Andreas Abel, 2018-10-31
 
+open import Data.Empty using (⊥)
 open import Data.List using (List; []; _∷_)
 open import Data.List.Any using (here; there)
 open import Data.List.Membership.Propositional using (_∈_)
@@ -82,9 +83,10 @@ mutual
 
 -- Semantics of types and contexts.
 
-⟦_⟧ : Ty → Cxt → Set
-⟦ o     ⟧ Γ = Ne Γ o
-⟦ A ⇒ B ⟧ Γ = Ne Γ (A ⇒ B) ⊎ (∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ)
+⟦_⟧ ⟦_⟧' : Ty → Cxt → Set
+⟦ A     ⟧  Γ = Ne Γ A ⊎ ⟦ A ⟧' Γ
+⟦ o     ⟧' Γ = ⊥
+⟦ A ⇒ B ⟧' Γ = ∀{Δ} (ρ : Δ ≤ Γ) → ⟦ A ⟧ Δ → ⟦ B ⟧ Δ
 
 ⟦_⟧G : (Φ Γ : Cxt) → Set
 ⟦ []    ⟧G Γ = ⊤
@@ -98,10 +100,10 @@ mutual
 
 -- Semantic types and contexts are presheaves.
 
-mon : (ρ : Δ ≤ Γ) → ∀{A} → ⟦ A ⟧ Γ → ⟦ A ⟧ Δ
-mon ρ {o} t = monNe ρ t
-mon ρ {A ⇒ B} (inj₁ t) = inj₁ (monNe ρ t)
+mon  : (ρ : Δ ≤ Γ) → ∀{A} → ⟦ A ⟧  Γ → ⟦ A ⟧  Δ
+mon ρ         (inj₁ t) = inj₁ (monNe ρ t)
 mon ρ {A ⇒ B} (inj₂ f) = inj₂ λ ρ' → f (ρ • ρ')
+mon ρ {o}     (inj₂ ())
 
 monG : (ρ : Δ ≤ Γ) → ∀{Φ} → ⟦ Φ ⟧G Γ → ⟦ Φ ⟧G Δ
 monG ρ {[]}    _       = _
@@ -111,14 +113,12 @@ monG ρ {A ∷ Φ} (γ , a) = monG ρ γ , mon ρ a
 
 mutual
   reflect : ∀{A} → Ne Γ A → ⟦ A ⟧ Γ
-  reflect {A = o}     t = t
-  reflect {A = _ ⇒ _} t = inj₁ t
+  reflect t = inj₁ t
 
   reify : ∀{A} → ⟦ A ⟧ Γ → Nf Γ A
-  reify {A = o} t = ne t
-  reify {A = B ⇒ C} a = case a of λ where
-    (inj₁ t) → ne t
-    (inj₂ f) → abs (reify (f (wk id) (reflect (var vz))))
+  reify             (inj₁ t) = ne t
+  reify {A = B ⇒ C} (inj₂ f) = abs (reify (f (wk id) (reflect (var vz))))
+  reify {A = o}     (inj₂ ())
 
 -- Application and evaluation.
 
