@@ -120,6 +120,14 @@ idS : Γ ⊢ Γ
 idS {[]} = []
 idS {Γ = A ∷ Γ} = liftS idS
 
+renS : (ρ : Γ ≤ Δ) → Γ ⊢ Δ
+renS id       = idS
+renS (wk   ρ) = monSub (wk id) (renS ρ)
+renS (lift ρ) = liftS (renS ρ)
+
+sgS : (ρ : Γ ≤ Δ) (u : Tm A Γ) → Γ ⊢ (A ∷ Δ)
+sgS ρ u = u ∷ renS ρ
+
 subst : Γ ⊢ Δ → Tm A Δ → Tm A Γ
 subst σ (var x)   = lookup σ x
 subst σ (abs t)   = abs (subst (liftS σ) t)
