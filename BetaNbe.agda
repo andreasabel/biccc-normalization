@@ -58,9 +58,9 @@ data _≤_ : (Γ Δ : Cxt) → Set where
 
 _•_ : (ρ : Γ ≤ Φ) (ρ' : Δ ≤ Γ) → Δ ≤ Φ
 ρ      • id      = ρ
-ρ      • wk ρ'   = wk (ρ • ρ')
-id     • lift ρ' = lift ρ'
-wk ρ   • lift ρ' = wk (ρ • ρ')
+ρ      • wk   ρ' = wk   (ρ • ρ')
+id     • ρ'      = ρ'
+wk   ρ • lift ρ' = wk   (ρ • ρ')
 lift ρ • lift ρ' = lift (ρ • ρ')
 
 -- Var, Ne, Nf are presheaves (monotonicity).
@@ -126,7 +126,7 @@ reify {A = o}     (val ())
 -- Application and evaluation.
 
 apply : ⟦ A ⇒ B ⟧ Γ → ⟦ A ⟧ Γ → ⟦ B ⟧ Γ
-apply (ne t) a = ne (app t (reify a))
+apply (ne  t) a = ne (app t (reify a))
 apply (val f) a = f id a
 
 ⦅_⦆ : Tm Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
