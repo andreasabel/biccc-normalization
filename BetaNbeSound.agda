@@ -5,13 +5,14 @@
 
 {-# OPTIONS --rewriting #-}
 
+open import Data.Empty using (⊥)
 open import Data.List using (List; []; _∷_)
 open import Data.List.All using (All; []; _∷_; lookup)
 open import Data.List.Any using (here; there)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Unit using (⊤)
-open import Data.Product using (_×_; _,_; proj₁; proj₂)
+open import Data.Product using (∃; _×_; _,_; proj₁; proj₂)
 
 open import Function using (_$_; _∘_; case_of_)
 open import Relation.Binary.PropositionalEquality as Id using (_≡_; refl; cong; cong₂)
@@ -98,7 +99,7 @@ monTm-comp {ρ = ρ} {t = var x}   = cong  var (monVar-comp {x = x} {ρ = ρ})
 monTm-comp         {t = abs t}   = cong  abs monTm-comp
 monTm-comp         {t = app t u} = cong₂ app monTm-comp monTm-comp
 
-{-# REWRITE monTm-comp #-}
+-- {-# REWRITE monTm-comp #-}
 
 -- Substitution.
 
@@ -109,9 +110,13 @@ monSub : Mon (_⊢ Φ)
 monSub ρ [] = []
 monSub ρ (t ∷ σ) = monTm ρ t ∷ monSub ρ σ
 
--- data Sub : (Φ Γ : Cxt) → Set where
---   [] : Sub [] Γ
---   _∷_ : Tm A Γ → Sub Φ Γ → Sub (A ∷ Φ) Γ
+-- Naturality of lookup.
+
+lookup-mon : ∀ σ → lookup (monSub ρ σ) x ≡ monTm ρ (lookup σ x)
+lookup-mon {x = vz}   (u ∷ σ) = refl
+lookup-mon {x = vs x} (u ∷ σ) = lookup-mon σ
+
+-- Constructions on substitutions.
 
 liftS : Γ ⊢ Δ → (A ∷ Γ) ⊢ (A ∷ Δ)
 liftS σ = var vz ∷ monSub (wk id) σ
@@ -133,8 +138,51 @@ subst σ (var x)   = lookup σ x
 subst σ (abs t)   = abs (subst (liftS σ) t)
 subst σ (app t u) = app (subst σ t) (subst σ u)
 
+-- Functoriality of substitution.
+
+-- subst σ (subst σ' t) ≡ subst (σ ∙ σ') t
+
 subst1 : Tm B (A ∷ Γ) → Tm A Γ → Tm B Γ
 subst1 t u = subst (u ∷ idS) t
+
+subst-sg-lift : subst (sgS ρ u) (monTm (lift ρ') t) ≡ subst (sgS (ρ • ρ') u) t
+subst-sg-lift = {!!}
+
+{-# REWRITE subst-sg-lift #-}
+
+variable
+  σ : Δ ⊢ Γ
+
+subst-sg-liftS : subst (sgS ρ u) (subst (liftS σ) t) ≡ subst (u ∷ monSub ρ σ) t
+subst-sg-liftS = {!!}
+-- subst-sg-liftS {t = var vz} = refl
+-- subst-sg-liftS {t = var (vs x)} = {!!}
+-- subst-sg-liftS {t = abs t} = cong abs {!!}
+-- subst-sg-liftS {t = app t u} = {!!}
+
+
+{-# REWRITE subst-sg-liftS #-}
+
+-- Identity substitution
+
+lookup-idS : lookup idS x ≡ var x
+lookup-idS {x = vz}   = refl
+lookup-idS {x = vs x} = Id.trans
+  (lookup-mon idS)
+  (cong (monTm (wk id)) (lookup-idS {x = x}))
+
+subst-idS : subst idS t ≡ t
+subst-idS {t = var x} = lookup-idS
+subst-idS {t = abs t} = cong abs subst-idS
+subst-idS {t = app t u} = cong₂ app subst-idS subst-idS
+
+-- {-# REWRITE subst-idS #-}
+
+subst-sg-wk-vz : subst (sgS (wk id) (var vz)) t ≡ t
+subst-sg-wk-vz = subst-idS
+
+{-# REWRITE subst-sg-wk-vz #-}
+
 
 -- Definitional equality.
 
@@ -155,6 +203,9 @@ monEq (app eq eq')   = app (monEq eq) (monEq eq')
 monEq refl           = refl
 monEq (trans eq eq') = trans (monEq eq) (monEq eq')
 monEq (sym eq)       = sym (monEq eq)
+
+eq-cong-β : Eq (abs t) t' → Eq (subst1 t u) (app t' u)
+eq-cong-β eq = trans (sym β) (appl eq)
 
 -- Neutral and non-neutral β-normal forms.
 
@@ -201,6 +252,11 @@ record NF {A Γ} (t : Tm A Γ) : Set where
     n    : Nf t′
     eq   : Eq t′ t
 
+-- Constructions on NE.
+
+appNE : NE t → NF u → NE (app t u)
+appNE (mkNE n eq) (mkNF m eq') = mkNE (app n m) (app eq eq')
+
 -- Constructions on NF.
 
 neNF : NE t → NF t
@@ -225,78 +281,96 @@ monNF (mkNF n eq) = mkNF (monNf n) (monEq eq)
 
 -- Semantics of types and contexts.
 
-VAL : ∀ A {Γ} → Tm A Γ → Set
-VAL o           t = NE t
-VAL (B ⇒ C) {Γ} t = NE t ⊎
-  ∀{Δ} (ρ : Δ ≤ Γ) {u : Tm B Δ} (a : VAL B u) → VAL C (app (monTm ρ t) u)
+mutual
+  ⟦_⟧ : ∀ A {Γ} → Tm A Γ → Set
+  ⟦ A ⟧ t = NE t ⊎ VAL A t
+
+  VAL : ∀ A {Γ} → Tm A Γ → Set
+  VAL o           t = ⊥
+  VAL (B ⇒ C) {Γ} t = ∃ λ t' → Eq (abs t') t ×
+    ∀{Δ} (ρ : Δ ≤ Γ) {u : Tm B Δ} (a : ⟦ B ⟧ u) → ⟦ C ⟧ (subst (sgS ρ u) t')
 
 ENV : Γ ⊢ Φ → Set
 ENV [] = ⊤
-ENV (t ∷ σ) = ENV σ × VAL _ t
+ENV (t ∷ σ) = ENV σ × ⟦ _ ⟧ t
 
 -- Conversion of semantics.
 
 convVAL : Eq t t' → VAL A t → VAL A t'
-convVAL {A = o}     eq t        = convNE eq t
-convVAL {A = _ ⇒ _} eq (inj₁ t) = inj₁ (convNE eq t)
-convVAL {A = _ ⇒ _} eq (inj₂ f) = inj₂ λ ρ a → convVAL (appl (monEq eq)) (f ρ a)
+convVAL {A = o}     eq ()
+convVAL {A = _ ⇒ _} eq (t' , eq' ,  f) = t' , trans eq' eq , f
+
+convDEN : Eq t t' → ⟦ A ⟧ t → ⟦ A ⟧ t'
+convDEN eq (inj₁ t) = inj₁ (convNE  eq t)
+convDEN eq (inj₂ f) = inj₂ (convVAL eq f)
 
 -- Monotonicity of semantics.
 
-monVAL : VAL A t → VAL A (monTm ρ t)
-monVAL {o} t = monNE t
-monVAL {A ⇒ B} (inj₁ t) = inj₁ (monNE t)
-monVAL {A ⇒ B} {ρ = ρ} (inj₂ f) = inj₂ λ ρ' a → f (ρ' • ρ) a
-  -- REWRITE monTm-comp
+mutual
+  monDEN : ⟦ A ⟧ t → ⟦ A ⟧ (monTm ρ t)
+  monDEN (inj₁ t) = inj₁ (monNE t)
+  monDEN (inj₂ f) = inj₂ (monVAL f)
 
-variable
-  σ : Δ ⊢ Γ
+  monVAL : VAL A t → VAL A (monTm ρ t)
+  monVAL {A = o} ()
+  monVAL {A = A ⇒ B} {ρ = ρ} (t' , eq  , f) =
+    monTm (lift ρ) t' ,  monEq eq  ,  λ ρ' a → f (ρ' • ρ) a
+    -- REWRITE subst-sg-lift
 
 monENV : ENV σ → ENV (monSub ρ σ)
 monENV {σ = []}    _       = _
-monENV {σ = t ∷ σ} (γ , v) = monENV γ , monVAL v
+monENV {σ = t ∷ σ} (γ , v) = monENV γ , monDEN v
 
 -- Variables are projections.
 
-lookupEnv : (x : Var A Γ) → ENV σ → VAL A (lookup σ x)
+lookupEnv : (x : Var A Γ) → ENV σ → ⟦ A ⟧ (lookup σ x)
 lookupEnv {σ = t ∷ σ} (vz)   = proj₂
 lookupEnv {σ = t ∷ σ} (vs x) = lookupEnv x ∘ proj₁
 
--- Reflection and reification.
+-- Reification.
 
 mutual
-  reflect : NE t → VAL A t
-  reflect {A = o}     t = t
-  reflect {A = _ ⇒ _} t = inj₁ t
+  reify : ⟦ A ⟧ t → NF t
+  reify (inj₁ t) = neNF t
+  reify (inj₂ f) = reifyVAL f
 
-  reify : VAL A t → NF t
-  reify {A = o} t = neNF t
-  reify {A = B ⇒ C} a = case a of λ where
-    (inj₁ t) → neNF t
-    (inj₂ f) → {! absNF {! (reify (f (wk id) (reflect (var vz)))) !} !}
-{-
+  reifyVAL : VAL A t → NF t
+  reifyVAL {A = o}     ()
+  reifyVAL {A = B ⇒ C} (t' , eq , f) = convNF eq
+    (absNF (reify (f (wk id) (inj₁ (mkNE (var vz) refl)))))
+    -- REWRITE subst-sg-wk-vz
+
 -- Application and evaluation.
 
-apply : ⟦ A ⇒ B ⟧ Γ → ⟦ A ⟧ Γ → ⟦ B ⟧ Γ
-apply c a = case c of λ where
-  (inj₁ t) → reflect (app t (reify a))
-  (inj₂ f) → f id a
+apply : ⟦ A ⇒ B ⟧ t → ⟦ A ⟧ u → ⟦ B ⟧ (app t u)
+apply (inj₁ t)            a = inj₁ (appNE t (reify a))
+apply (inj₂ (_ , eq , f)) a = convDEN (eq-cong-β eq) (f id a)
 
-⦅_⦆ : Tm Γ A → ⟦ Γ ⟧G Δ → ⟦ A ⟧ Δ
-⦅ var x ⦆ γ = ⦅ x ⦆v γ
-⦅ abs t ⦆ γ = inj₂ (λ ρ a → ⦅ t ⦆( monG ρ γ , a ))
+⦅_⦆ : (t : Tm A Γ) → ENV σ → ⟦ A ⟧ (subst σ t)
+⦅ var x ⦆   γ = lookupEnv x γ
 ⦅ app t u ⦆ γ = apply (⦅ t ⦆ γ) (⦅ u ⦆ γ)
+⦅ abs t ⦆   γ = inj₂ (_ , refl , λ ρ a → ⦅ t ⦆ (monENV γ , a))
+   -- REWRITE subst-sg-liftS
+
+-- ⦅_⦆ : (t : Tm A Γ) (σ : Δ ⊢ Γ) → ENV σ → ⟦ A ⟧ (subst σ t)
+-- ⦅ var x ⦆   σ γ = lookupEnv x γ
+-- ⦅ abs t ⦆   σ γ = inj₂ ( subst (liftS σ) t , refl ,  λ ρ a →
+--     ⦅ t ⦆(_ ∷ _) ( monENV γ , a )   )
+-- ⦅ app t u ⦆ σ γ = apply (⦅ t ⦆ σ γ) (⦅ u ⦆ σ γ)
+
 
 -- Identity environment.
 
-env : ∀{Γ} (ρ : Δ ≤ Γ) → ⟦ Γ ⟧G Δ
-env {Γ = []}    ρ = _
-env {Γ = A ∷ Γ} ρ = env (wk id • ρ) , reflect (var (monVar ρ vz))
+-- idEnv : ENV idS  -- generalization does not kick in
+idEnv : ∀{Γ} → ENV (idS {Γ = Γ})
+idEnv {Γ = []}    = _
+idEnv {Γ = A ∷ Γ} = monENV idEnv , inj₁ (mkNE (var vz) refl)
 
 -- Normalization.
 
-nf : Tm Γ A → Nf Γ A
-nf t = reify (⦅ t ⦆ (env id))
+nf : (t : Tm A Γ) → NF t
+nf t = reify (Id.subst (⟦ _ ⟧) subst-idS (⦅ t ⦆ idEnv))
+  -- REWRITE subst-idS  fails here
 
 -- -}
 -- -}
