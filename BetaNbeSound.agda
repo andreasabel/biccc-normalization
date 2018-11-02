@@ -151,7 +151,7 @@ subst-sg-lift = {!!}
 {-# REWRITE subst-sg-lift #-}
 
 variable
-  σ : Δ ⊢ Γ
+  σ σ' : Δ ⊢ Γ
 
 subst-sg-liftS : subst (sgS ρ u) (subst (liftS σ) t) ≡ subst (u ∷ monSub ρ σ) t
 subst-sg-liftS = {!!}
@@ -401,16 +401,30 @@ mutual
   reflVAL {A = o} ()
   reflVAL {A = A ⇒ B} (t' , eq , f) ρ a = reflDEN (f ρ a)
 
-EqENV : ∀{σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set
-EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
-EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
+-- EqENV : ∀{σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set
+-- EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
+-- EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
 
 variable
   γ γ' : ENV σ
+  a a'  : ⟦ A ⟧ t
+
+-- data EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
+--   []   : EqENV {Δ} [] [] γ γ'
+--   _∷_  : EqDEN a a' → EqENV σ σ' γ γ' → EqENV (_ ∷ σ) (_ ∷ σ') (γ , a) (γ' , a')
+
+data EqENV : ∀{Δ Γ} {σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set where
+  []   : EqENV {Δ} {σ = []} {σ' = []} γ γ'
+  _∷_  : EqDEN a a' → EqENV γ γ' → EqENV {σ = _ ∷ σ} {σ' = _ ∷ σ'} (γ , a) (γ' , a')
+
+-- EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
+-- EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
+-- EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
 
 monEqENV : EqENV γ γ' → EqENV (monENV γ) (monENV γ')
 monEqENV = ?
 
+{-
 -- EqENV : (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set
 -- EqENV []      []        γ       γ'        = ⊤
 -- EqENV (u ∷ σ) (u' ∷ σ') (γ , a) (γ' , a') = EqENV σ σ' γ γ' × EqDEN a a'
