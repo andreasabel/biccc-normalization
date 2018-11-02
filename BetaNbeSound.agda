@@ -153,13 +153,9 @@ subst-sg-lift = {!!}
 variable
   σ σ' : Δ ⊢ Γ
 
+-- A consequence of substitution composition
 subst-sg-liftS : subst (sgS ρ u) (subst (liftS σ) t) ≡ subst (u ∷ monSub ρ σ) t
 subst-sg-liftS = {!!}
--- subst-sg-liftS {t = var vz} = refl
--- subst-sg-liftS {t = var (vs x)} = {!!}
--- subst-sg-liftS {t = abs t} = cong abs {!!}
--- subst-sg-liftS {t = app t u} = {!!}
-
 
 {-# REWRITE subst-sg-liftS #-}
 
@@ -227,15 +223,6 @@ mutual
   monNf (ne t)  = ne (monNe t)
   monNf (abs t) = abs (monNf t)
 
--- mutual
---   monNe : (ρ : Δ ≤ Γ) → Ne t → Ne (monTm ρ t)
---   monNe ρ (var x)   = var (monVar ρ x)
---   monNe ρ (app t u) = app (monNe ρ t) (monNf ρ u)
-
---   monNf : (ρ : Δ ≤ Γ) → Nf t → Nf (monTm ρ t)
---   monNf ρ (ne t)  = ne (monNe ρ t)
---   monNf ρ (abs t) = abs (monNf (lift ρ) t)
-
 -- Neutral and normal up to conversion.
 
 record NE {A Γ} (t : Tm A Γ) : Set where
@@ -253,6 +240,9 @@ record NF {A Γ} (t : Tm A Γ) : Set where
     eq   : Eq t′ t
 
 -- Constructions on NE.
+
+vzNE : NE (var {Γ = A ∷ Γ} vz)
+vzNE = mkNE (var vz) refl
 
 appNE : NE t → NF u → NE (app t u)
 appNE (mkNE n eq) (mkNF m eq') = mkNE (app n m) (app eq eq')
@@ -319,23 +309,15 @@ data ENV : ∀{Γ Φ} → Γ ⊢ Φ → Set where
   []  : ENV {Γ} []                     -- generalization wants {Γ} here
   _∷_ : (a : ⟦ A ⟧ t) (γ : ENV σ) → ENV (t ∷ σ)
 
--- ENV : Γ ⊢ Φ → Set
--- ENV [] = ⊤
--- ENV (t ∷ σ) = ENV σ × ⟦ _ ⟧ t
-
 monENV : ENV σ → ENV (monSub ρ σ)
 monENV []      = []
 monENV (a ∷ γ) = monDEN a ∷ monENV γ
 
--- Variables are projections.
+-- Variables are projections from the environment.
 
 lookupEnv : (x : Var A Γ) → ENV σ → ⟦ A ⟧ (lookup σ x)
 lookupEnv (vz)   (a ∷ γ) = a
 lookupEnv (vs x) (a ∷ γ) = lookupEnv x γ
-
--- lookupEnv : (x : Var A Γ) → ENV σ → ⟦ A ⟧ (lookup σ x)
--- lookupEnv {σ = t ∷ σ} (vz)   = proj₂
--- lookupEnv {σ = t ∷ σ} (vs x) = lookupEnv x ∘ proj₁
 
 -- Reification.
 
@@ -347,7 +329,7 @@ mutual
   reifyVAL : VAL A t → NF t
   reifyVAL {A = o}     ()
   reifyVAL {A = B ⇒ C} (t' , eq , f) = convNF eq
-    (absNF (reify (f (wk id) (inj₁ (mkNE (var vz) refl)))))
+    (absNF (reify (f (wk id) (inj₁ vzNE))))
     -- REWRITE subst-sg-wk-vz
 
 -- Application and evaluation.
@@ -362,115 +344,15 @@ apply (inj₂ (_ , eq , f)) a = convDEN (eq-cong-β eq) (f id a)
 ⦅ abs t ⦆   γ = inj₂ (_ , refl , λ ρ a → ⦅ t ⦆ (a ∷ monENV γ))
    -- REWRITE subst-sg-liftS
 
--- ⦅_⦆ : (t : Tm A Γ) (σ : Δ ⊢ Γ) → ENV σ → ⟦ A ⟧ (subst σ t)
--- ⦅ var x ⦆   σ γ = lookupEnv x γ
--- ⦅ abs t ⦆   σ γ = inj₂ ( subst (liftS σ) t , refl ,  λ ρ a →
---     ⦅ t ⦆(_ ∷ _) ( monENV γ , a )   )
--- ⦅ app t u ⦆ σ γ = apply (⦅ t ⦆ σ γ) (⦅ u ⦆ σ γ)
-
-
 -- Identity environment.
 
--- idEnv : ENV idS  -- generalization does not kick in
-idEnv : ∀{Γ} → ENV (idS {Γ = Γ})
+-- idEnv : ENV idS  -- generalization does not kick in without Γ
+idEnv : ENV (idS {Γ = Γ})
 idEnv {Γ = []}    = []
-idEnv {Γ = A ∷ Γ} = inj₁ (mkNE (var vz) refl) ∷ monENV idEnv
+idEnv {Γ = A ∷ Γ} = inj₁ vzNE ∷ monENV idEnv
 
 -- Normalization.
 
 nf : (t : Tm A Γ) → NF t
 nf t = reify (Id.subst (⟦ _ ⟧) subst-idS (⦅ t ⦆ idEnv))
   -- REWRITE subst-idS  fails here
-
--- Completeness.
-
-EqNE : ∀{t t' : Tm A Γ} → NE t → NE t' → Set
-EqNE (mkNE {n} _ _) (mkNE {n'} _ _) = n ≡ n'
-
-EqNF : ∀{t t' : Tm A Γ} → NF t → NF t' → Set
-EqNF (mkNF {n} _ _) (mkNF {n'} _ _) = n ≡ n'
-
-mutual
-  EqDEN : ∀{t t' : Tm A Γ} → ⟦ A ⟧ t → ⟦ A ⟧ t' → Set
-  EqDEN (inj₁ t) (inj₁ t') = EqNE t t'
-  EqDEN (inj₁ _) (inj₂ _) = ⊥  -- no η
-  EqDEN (inj₂ _) (inj₁ _) = ⊥  -- no η
-  EqDEN (inj₂ f) (inj₂ f') = EqVAL f f'
-
-  EqVAL : ∀{t t' : Tm A Γ} → VAL A t → VAL A t' → Set
-  EqVAL         {A = o} _ _ = ⊤
-  EqVAL {Γ = Γ} {A = A ⇒ B} (t , eq , f) (t' , eq' , f') =
-    ∀ {Δ} (ρ : Δ ≤ Γ) {u : Tm A Δ} (a : ⟦ A ⟧ u) → EqDEN (f ρ a) (f' ρ a)
-
-variable
-  a a' f f' : ⟦ A ⟧ t
-
-monEqDEN : EqDEN {A = A} a a' → EqDEN (monDEN {ρ = ρ} a) (monDEN {ρ = ρ} a')
-monEqDEN                       {a = inj₁ _} {a' = inj₁ _} refl = refl
-monEqDEN                       {a = inj₁ _} {a' = inj₂ _} ()
-monEqDEN                       {a = inj₂ _} {a' = inj₁ _} ()
-monEqDEN {A = A₁ ⇒ A₂} {ρ = ρ} {a = inj₂ _} {a' = inj₂ _} eq ρ' a = eq (ρ' • _) a
-
-mutual
-  reflDEN : (a : ⟦ A ⟧ t) → EqDEN a a
-  reflDEN (inj₁ t) = refl
-  reflDEN (inj₂ a) = reflVAL a
-
-  reflVAL : (a : VAL A t) → EqVAL a a
-  reflVAL {A = o} ()
-  reflVAL {A = A ⇒ B} (t' , eq , f) ρ a = reflDEN (f ρ a)
-
--- EqENV : ∀{σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set
--- EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
--- EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
-
-variable
-  γ γ' : ENV σ
-
--- data EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
---   []   : EqENV {Δ} [] [] γ γ'
---   _∷_  : EqDEN a a' → EqENV σ σ' γ γ' → EqENV (_ ∷ σ) (_ ∷ σ') (γ , a) (γ' , a')
-
-data EqENV : ∀{Δ Γ} {σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set where
-  []   : EqENV {Δ} [] []
-  _∷_  : (eq : EqDEN a a') (eqs : EqENV γ γ') → EqENV (a ∷ γ) (a' ∷ γ')
-
--- EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
--- EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
--- EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
-
-monEqENV : EqENV γ γ' → EqENV (monENV {ρ = ρ} γ) (monENV {ρ = ρ} γ')
-monEqENV [] = []
-monEqENV (_∷_ {a = a} eq eqs) = monEqDEN {a = a} eq ∷ monEqENV eqs
-
--- EqENV : (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set
--- EqENV []      []        γ       γ'        = ⊤
--- EqENV (u ∷ σ) (u' ∷ σ') (γ , a) (γ' , a') = EqENV σ σ' γ γ' × EqDEN a a'
-
--- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀ {σ σ' : Δ ⊢ Γ} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
--- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀{σ σ' : Δ ⊢ Γ}{γ : ENV σ}{γ' : ENV σ'} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
-
-applyEq : EqDEN f f' → EqDEN a a' → EqDEN (apply f a) (apply f' a')
-applyEq {f = inj₁ x₁} {f' = inj₁ x₂} eq eq' = {!!}
-applyEq {f = inj₁ _} {f' = inj₂ _} () eq'
-applyEq {f = inj₂ _} {f' = inj₁ _} () eq'
-applyEq {f = inj₂ (t , e , f)} {f' = inj₂ (t' , e' , f')} eq eq' = {!eq id !}
-
-fund : ∀{t t' : Tm A Γ}
-  → Eq t t' → ∀{σ σ' : Δ ⊢ Γ} {γ : ENV σ} {γ' : ENV σ'}
-  → EqENV γ γ'
-  → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
-
-fund β eqs = {!!}
-fund (abs eq) eqs ρ a = fund eq (reflDEN a ∷ monEqENV eqs)
-fund (app eq eq') eqs = {! applyEq (fund eq eqs) (fund eq' eqs) !}
-fund refl eqs = {!!}
-fund (trans eq eq₁) eqs = {!!}
-fund (sym eq) eqs = {!!}
-
--- -}
--- -}
--- -}
--- -}
--- -}
--- -}
