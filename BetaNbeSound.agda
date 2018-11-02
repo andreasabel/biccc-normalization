@@ -279,7 +279,7 @@ monNE (mkNE n eq) = mkNE (monNe n) (monEq eq)
 monNF : NF t → NF (monTm ρ t)
 monNF (mkNF n eq) = mkNF (monNf n) (monEq eq)
 
--- Semantics of types and contexts.
+-- Semantics of types.
 
 mutual
   ⟦_⟧ : ∀ A {Γ} → Tm A Γ → Set
@@ -289,10 +289,6 @@ mutual
   VAL o           t = ⊥
   VAL (B ⇒ C) {Γ} t = ∃ λ t' → Eq (abs t') t ×
     ∀{Δ} (ρ : Δ ≤ Γ) {u : Tm B Δ} (a : ⟦ B ⟧ u) → ⟦ C ⟧ (subst (sgS ρ u) t')
-
-ENV : Γ ⊢ Φ → Set
-ENV [] = ⊤
-ENV (t ∷ σ) = ENV σ × ⟦ _ ⟧ t
 
 -- Conversion of semantics.
 
@@ -317,15 +313,29 @@ mutual
     monTm (lift ρ) t' ,  monEq eq  ,  λ ρ' a → f (ρ' • ρ) a
     -- REWRITE subst-sg-lift
 
+-- Semantics of contexts.
+
+data ENV : ∀{Γ Φ} → Γ ⊢ Φ → Set where
+  []  : ENV {Γ} []                     -- generalization wants {Γ} here
+  _∷_ : (a : ⟦ A ⟧ t) (γ : ENV σ) → ENV (t ∷ σ)
+
+-- ENV : Γ ⊢ Φ → Set
+-- ENV [] = ⊤
+-- ENV (t ∷ σ) = ENV σ × ⟦ _ ⟧ t
+
 monENV : ENV σ → ENV (monSub ρ σ)
-monENV {σ = []}    _       = _
-monENV {σ = t ∷ σ} (γ , v) = monENV γ , monDEN v
+monENV []      = []
+monENV (a ∷ γ) = monDEN a ∷ monENV γ
 
 -- Variables are projections.
 
 lookupEnv : (x : Var A Γ) → ENV σ → ⟦ A ⟧ (lookup σ x)
-lookupEnv {σ = t ∷ σ} (vz)   = proj₂
-lookupEnv {σ = t ∷ σ} (vs x) = lookupEnv x ∘ proj₁
+lookupEnv (vz)   (a ∷ γ) = a
+lookupEnv (vs x) (a ∷ γ) = lookupEnv x γ
+
+-- lookupEnv : (x : Var A Γ) → ENV σ → ⟦ A ⟧ (lookup σ x)
+-- lookupEnv {σ = t ∷ σ} (vz)   = proj₂
+-- lookupEnv {σ = t ∷ σ} (vs x) = lookupEnv x ∘ proj₁
 
 -- Reification.
 
@@ -349,7 +359,7 @@ apply (inj₂ (_ , eq , f)) a = convDEN (eq-cong-β eq) (f id a)
 ⦅_⦆ : (t : Tm A Γ) → ENV σ → ⟦ A ⟧ (subst σ t)
 ⦅ var x ⦆   γ = lookupEnv x γ
 ⦅ app t u ⦆ γ = apply (⦅ t ⦆ γ) (⦅ u ⦆ γ)
-⦅ abs t ⦆   γ = inj₂ (_ , refl , λ ρ a → ⦅ t ⦆ (monENV γ , a))
+⦅ abs t ⦆   γ = inj₂ (_ , refl , λ ρ a → ⦅ t ⦆ (a ∷ monENV γ))
    -- REWRITE subst-sg-liftS
 
 -- ⦅_⦆ : (t : Tm A Γ) (σ : Δ ⊢ Γ) → ENV σ → ⟦ A ⟧ (subst σ t)
@@ -363,8 +373,8 @@ apply (inj₂ (_ , eq , f)) a = convDEN (eq-cong-β eq) (f id a)
 
 -- idEnv : ENV idS  -- generalization does not kick in
 idEnv : ∀{Γ} → ENV (idS {Γ = Γ})
-idEnv {Γ = []}    = _
-idEnv {Γ = A ∷ Γ} = monENV idEnv , inj₁ (mkNE (var vz) refl)
+idEnv {Γ = []}    = []
+idEnv {Γ = A ∷ Γ} = inj₁ (mkNE (var vz) refl) ∷ monENV idEnv
 
 -- Normalization.
 
@@ -388,9 +398,18 @@ mutual
   EqDEN (inj₂ f) (inj₂ f') = EqVAL f f'
 
   EqVAL : ∀{t t' : Tm A Γ} → VAL A t → VAL A t' → Set
-  EqVAL         {A = o} () _
+  EqVAL         {A = o} _ _ = ⊤
   EqVAL {Γ = Γ} {A = A ⇒ B} (t , eq , f) (t' , eq' , f') =
     ∀ {Δ} (ρ : Δ ≤ Γ) {u : Tm A Δ} (a : ⟦ A ⟧ u) → EqDEN (f ρ a) (f' ρ a)
+
+variable
+  a a' f f' : ⟦ A ⟧ t
+
+monEqDEN : EqDEN {A = A} a a' → EqDEN (monDEN {ρ = ρ} a) (monDEN {ρ = ρ} a')
+monEqDEN                       {a = inj₁ _} {a' = inj₁ _} refl = refl
+monEqDEN                       {a = inj₁ _} {a' = inj₂ _} ()
+monEqDEN                       {a = inj₂ _} {a' = inj₁ _} ()
+monEqDEN {A = A₁ ⇒ A₂} {ρ = ρ} {a = inj₂ _} {a' = inj₂ _} eq ρ' a = eq (ρ' • _) a
 
 mutual
   reflDEN : (a : ⟦ A ⟧ t) → EqDEN a a
@@ -407,24 +426,23 @@ mutual
 
 variable
   γ γ' : ENV σ
-  a a'  : ⟦ A ⟧ t
 
 -- data EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
 --   []   : EqENV {Δ} [] [] γ γ'
 --   _∷_  : EqDEN a a' → EqENV σ σ' γ γ' → EqENV (_ ∷ σ) (_ ∷ σ') (γ , a) (γ' , a')
 
 data EqENV : ∀{Δ Γ} {σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set where
-  []   : EqENV {Δ} {σ = []} {σ' = []} γ γ'
-  _∷_  : EqDEN a a' → EqENV γ γ' → EqENV {σ = _ ∷ σ} {σ' = _ ∷ σ'} (γ , a) (γ' , a')
+  []   : EqENV {Δ} [] []
+  _∷_  : (eq : EqDEN a a') (eqs : EqENV γ γ') → EqENV (a ∷ γ) (a' ∷ γ')
 
 -- EqENV : ∀{Δ Γ} (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set where
 -- EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
 -- EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
 
-monEqENV : EqENV γ γ' → EqENV (monENV γ) (monENV γ')
-monEqENV = ?
+monEqENV : EqENV γ γ' → EqENV (monENV {ρ = ρ} γ) (monENV {ρ = ρ} γ')
+monEqENV [] = []
+monEqENV (_∷_ {a = a} eq eqs) = monEqDEN {a = a} eq ∷ monEqENV eqs
 
-{-
 -- EqENV : (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set
 -- EqENV []      []        γ       γ'        = ⊤
 -- EqENV (u ∷ σ) (u' ∷ σ') (γ , a) (γ' , a') = EqENV σ σ' γ γ' × EqDEN a a'
@@ -432,13 +450,20 @@ monEqENV = ?
 -- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀ {σ σ' : Δ ⊢ Γ} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
 -- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀{σ σ' : Δ ⊢ Γ}{γ : ENV σ}{γ' : ENV σ'} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
 
+applyEq : EqDEN f f' → EqDEN a a' → EqDEN (apply f a) (apply f' a')
+applyEq {f = inj₁ x₁} {f' = inj₁ x₂} eq eq' = {!!}
+applyEq {f = inj₁ _} {f' = inj₂ _} () eq'
+applyEq {f = inj₂ _} {f' = inj₁ _} () eq'
+applyEq {f = inj₂ (t , e , f)} {f' = inj₂ (t' , e' , f')} eq eq' = {!eq id !}
+
 fund : ∀{t t' : Tm A Γ}
   → Eq t t' → ∀{σ σ' : Δ ⊢ Γ} {γ : ENV σ} {γ' : ENV σ'}
   → EqENV γ γ'
   → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
+
 fund β eqs = {!!}
-fund (abs eq) eqs ρ a = fund eq ({!monEqENV eqs!} , reflDEN a)
-fund (app eq eq₁) eqs = {!!}
+fund (abs eq) eqs ρ a = fund eq (reflDEN a ∷ monEqENV eqs)
+fund (app eq eq') eqs = {! applyEq (fund eq eqs) (fund eq' eqs) !}
 fund refl eqs = {!!}
 fund (trans eq eq₁) eqs = {!!}
 fund (sym eq) eqs = {!!}
