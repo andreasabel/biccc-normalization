@@ -534,13 +534,41 @@ nf : (t : Tm A Γ) → NF t
 nf t = reify (Id.subst (⟦ _ ⟧) subst-idS (⦅ t ⦆ idEnv))
   -- REWRITE subst-idS  fails here
 
+-- Evaluation of renamings.
+
+monSub-id : monSub id σ ≡ σ
+monSub-id = {!!}
+
+-- {-# REWRITE monSub-id #-}
+
 -- Evaluation of substitutions.
 
 evalS : (σ : Δ ⊢ Γ) (γ : ENV σ') → ENV (σ' ∙ σ)
 evalS []      γ = []
 evalS (u ∷ σ) γ = ⦅ u ⦆ γ ∷ evalS σ γ
 
+-- TODO: define this natively!
+evalR : (ρ : Δ ≤ Γ) (γ : ENV σ) → ENV (σ ∙ renS ρ)
+evalR ρ γ = evalS (renS ρ) γ
+
+-- evalR-id : evalR id γ ≡ γ
+-- evalR-id = ?
+
+evalR-wk : EqENV (evalR (wk ρ) (a ∷ γ)) (evalR ρ γ)
+evalR-wk = {!!}
+
 -- Substitution lemma.
+
+lookupEnv-mon : EqDEN (lookupEnv (monVar ρ x) γ) (lookupEnv x (evalR ρ γ))
+lookupEnv-mon            {ρ = id}     {γ = a ∷ γ} = {! reflDEN a !}
+lookupEnv-mon            {ρ = wk ρ}   {γ = a ∷ γ} = {!!}
+lookupEnv-mon {x = vz}   {ρ = lift ρ} {γ = a ∷ γ} = reflDEN a
+lookupEnv-mon {x = vs x} {ρ = lift ρ} {γ = a ∷ γ} = {!!}
+
+eval-mon : EqDEN (⦅ monTm ρ t ⦆ γ) (⦅  t ⦆ (evalR ρ γ))
+eval-mon {t = var x} = {!!}
+eval-mon {t = abs t} = {!!}
+eval-mon {t = app t u} = {!!}
 
 -- TODO: this does not go through
 -- Rather generalize to arbitrary renamings.
