@@ -372,6 +372,63 @@ nf : (t : Tm A Γ) → NF t
 nf t = reify (Id.subst (⟦ _ ⟧) subst-idS (⦅ t ⦆ idEnv))
   -- REWRITE subst-idS  fails here
 
+-- Completeness.
+
+EqNE : ∀{t t' : Tm A Γ} → NE t → NE t' → Set
+EqNE (mkNE {n} _ _) (mkNE {n'} _ _) = n ≡ n'
+
+EqNF : ∀{t t' : Tm A Γ} → NF t → NF t' → Set
+EqNF (mkNF {n} _ _) (mkNF {n'} _ _) = n ≡ n'
+
+mutual
+  EqDEN : ∀{t t' : Tm A Γ} → ⟦ A ⟧ t → ⟦ A ⟧ t' → Set
+  EqDEN (inj₁ t) (inj₁ t') = EqNE t t'
+  EqDEN (inj₁ _) (inj₂ _) = ⊥  -- no η
+  EqDEN (inj₂ _) (inj₁ _) = ⊥  -- no η
+  EqDEN (inj₂ f) (inj₂ f') = EqVAL f f'
+
+  EqVAL : ∀{t t' : Tm A Γ} → VAL A t → VAL A t' → Set
+  EqVAL         {A = o} () _
+  EqVAL {Γ = Γ} {A = A ⇒ B} (t , eq , f) (t' , eq' , f') =
+    ∀ {Δ} (ρ : Δ ≤ Γ) {u : Tm A Δ} (a : ⟦ A ⟧ u) → EqDEN (f ρ a) (f' ρ a)
+
+mutual
+  reflDEN : (a : ⟦ A ⟧ t) → EqDEN a a
+  reflDEN (inj₁ t) = refl
+  reflDEN (inj₂ a) = reflVAL a
+
+  reflVAL : (a : VAL A t) → EqVAL a a
+  reflVAL {A = o} ()
+  reflVAL {A = A ⇒ B} (t' , eq , f) ρ a = reflDEN (f ρ a)
+
+EqENV : ∀{σ σ' : Δ ⊢ Γ} → ENV σ → ENV σ' → Set
+EqENV {σ = []}    {σ' = []}      γ γ' = ⊤
+EqENV {σ = u ∷ σ} {σ' = u' ∷ σ'} (γ , a) (γ' , a') = EqENV γ γ' × EqDEN a a'
+
+variable
+  γ γ' : ENV σ
+
+monEqENV : EqENV γ γ' → EqENV (monENV γ) (monENV γ')
+monEqENV = ?
+
+-- EqENV : (σ σ' : Δ ⊢ Γ) → ENV σ → ENV σ' → Set
+-- EqENV []      []        γ       γ'        = ⊤
+-- EqENV (u ∷ σ) (u' ∷ σ') (γ , a) (γ' , a') = EqENV σ σ' γ γ' × EqDEN a a'
+
+-- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀ {σ σ' : Δ ⊢ Γ} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
+-- fund : ∀{t t' : Tm A Γ} → Eq t t' → ∀{σ σ' : Δ ⊢ Γ}{γ : ENV σ}{γ' : ENV σ'} → EqENV σ σ' γ γ' → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
+
+fund : ∀{t t' : Tm A Γ}
+  → Eq t t' → ∀{σ σ' : Δ ⊢ Γ} {γ : ENV σ} {γ' : ENV σ'}
+  → EqENV γ γ'
+  → EqDEN (⦅ t ⦆ γ) ( ⦅ t' ⦆ γ')
+fund β eqs = {!!}
+fund (abs eq) eqs ρ a = fund eq ({!monEqENV eqs!} , reflDEN a)
+fund (app eq eq₁) eqs = {!!}
+fund refl eqs = {!!}
+fund (trans eq eq₁) eqs = {!!}
+fund (sym eq) eqs = {!!}
+
 -- -}
 -- -}
 -- -}
