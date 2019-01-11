@@ -72,12 +72,12 @@ monVar (lift ρ) vz     = vz
 monVar (lift ρ) (vs x) = vs (monVar ρ x)
 
 monVar-comp : monVar ρ (monVar ρ' x) ≡ monVar (ρ • ρ') x
-monVar-comp {x = x}    {ρ = id}     {ρ' = ρ'}      = refl
-monVar-comp {x = x}    {ρ = wk ρ}   {ρ' = ρ'}      = cong vs (monVar-comp {ρ = ρ})
-monVar-comp {x = x}    {ρ = lift ρ} {ρ' = id}      = refl
-monVar-comp {x = x}    {ρ = lift ρ} {ρ' = wk ρ'}   = cong vs (monVar-comp {ρ = ρ})
-monVar-comp {x = vz}   {ρ = lift ρ} {ρ' = lift ρ'} = refl
-monVar-comp {x = vs x} {ρ = lift ρ} {ρ' = lift ρ'} = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = id}     {ρ' = ρ'}      {x = x}    = refl
+monVar-comp {ρ = wk ρ}   {ρ' = ρ'}      {x = x}    = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = lift ρ} {ρ' = id}      {x = x}    = refl
+monVar-comp {ρ = lift ρ} {ρ' = wk ρ'}   {x = x}    = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = lift ρ} {ρ' = lift ρ'} {x = vz}   = refl
+monVar-comp {ρ = lift ρ} {ρ' = lift ρ'} {x = vs x} = cong vs (monVar-comp {ρ = ρ})
 
 -- Terms.
 
@@ -95,7 +95,7 @@ monTm ρ (abs t)   = abs (monTm (lift ρ) t)
 monTm ρ (app t u) = app (monTm ρ t) (monTm ρ u)
 
 monTm-comp : monTm ρ (monTm ρ' t) ≡ monTm (ρ • ρ') t
-monTm-comp {ρ = ρ} {t = var x}   = cong  var (monVar-comp {x = x} {ρ = ρ})
+monTm-comp {ρ = ρ} {t = var x}   = cong  var (monVar-comp {ρ = ρ} {x = x})
 monTm-comp         {t = abs t}   = cong  abs monTm-comp
 monTm-comp         {t = app t u} = cong₂ app monTm-comp monTm-comp
 
@@ -335,8 +335,8 @@ mutual
   EqDEN (inj₂ f) (inj₂ f') = EqVAL f f'
 
   EqVAL : ∀{t t' : Tm A Γ} → VAL A t → VAL A t' → Set
-  EqVAL         {A = o}     _ _ = ⊤
-  EqVAL {Γ = Γ} {A = A ⇒ B} (lam _ f _) (lam _ f' _) =
+  EqVAL {A = o}             _ _ = ⊤
+  EqVAL {A = A ⇒ B} {Γ = Γ} (lam _ f _) (lam _ f' _) =
     ∀ {Δ} (ρ : Δ ≤ Γ) {u : Tm A Δ} (a : ⟦ A ⟧ u) → EqDEN (f ρ a) (f' ρ a)
 
 -- Conversion of semantics.
@@ -377,10 +377,10 @@ mutual
 -- Monotonicity of equality.
 
 monEqDEN : EqDEN {A = A} a a' → EqDEN (monDEN {ρ = ρ} a) (monDEN {ρ = ρ} a')
-monEqDEN                       {a = inj₁ _} {a' = inj₁ _} refl = refl
-monEqDEN                       {a = inj₁ _} {a' = inj₂ _} ()
-monEqDEN                       {a = inj₂ _} {a' = inj₁ _} ()
-monEqDEN {A = A₁ ⇒ A₂} {ρ = ρ} {a = inj₂ _} {a' = inj₂ _} eq ρ' a = eq (ρ' • _) a
+monEqDEN               {a = inj₁ _} {a' = inj₁ _} refl = refl
+monEqDEN               {a = inj₁ _} {a' = inj₂ _} ()
+monEqDEN               {a = inj₂ _} {a' = inj₁ _} ()
+monEqDEN {A = A₁ ⇒ A₂} {a = inj₂ _} {a' = inj₂ _} eq ρ' a = eq (ρ' • _) a
 
 -- Reflexivity of semantic equality.
 
@@ -560,10 +560,10 @@ evalR-wk = {!!}
 -- Substitution lemma.
 
 lookupEnv-mon : EqDEN (lookupEnv (monVar ρ x) γ) (lookupEnv x (evalR ρ γ))
-lookupEnv-mon            {ρ = id}     {γ = a ∷ γ} = {! reflDEN a !}
-lookupEnv-mon            {ρ = wk ρ}   {γ = a ∷ γ} = {!!}
-lookupEnv-mon {x = vz}   {ρ = lift ρ} {γ = a ∷ γ} = reflDEN a
-lookupEnv-mon {x = vs x} {ρ = lift ρ} {γ = a ∷ γ} = {!!}
+lookupEnv-mon {ρ = id}                {γ = a ∷ γ} = {! reflDEN a !}
+lookupEnv-mon {ρ = wk ρ}              {γ = a ∷ γ} = {!!}
+lookupEnv-mon {ρ = lift ρ} {x = vz}   {γ = a ∷ γ} = reflDEN a
+lookupEnv-mon {ρ = lift ρ} {x = vs x} {γ = a ∷ γ} = {!!}
 
 eval-mon : EqDEN (⦅ monTm ρ t ⦆ γ) (⦅  t ⦆ (evalR ρ γ))
 eval-mon {t = var x} = {!!}
@@ -591,21 +591,21 @@ evalS-wk-mon {σ = u ∷ σ} = {!!} ∷ {!!}
 --       (⦅ t ⦆ (a ∷ evalS (monSub (wk id) σ) (a ∷ monENV γ)))
 
 substLem' : EqDEN (⦅ lookup σ x ⦆ γ) (lookupEnv x (evalS σ γ))
-substLem' {x = vz}   {σ = u ∷ σ} = reflDEN (⦅ u ⦆ _)
-substLem' {x = vs x} {σ = u ∷ σ} = substLem' {x = x} {σ = σ}
+substLem' {σ = u ∷ σ} {x = vz}   = reflDEN (⦅ u ⦆ _)
+substLem' {σ = u ∷ σ} {x = vs x} = substLem' {σ = σ} {x = x}
 
 substLem : EqDEN (⦅ subst σ t ⦆ γ) (⦅ t ⦆(evalS σ γ))
-substLem {t = var x} {σ = σ} = substLem' {x = x} {σ = σ}
-substLem {t = abs t} {σ = σ} {γ = γ} ρ {u} a  = {!  (substLem {t = t} {σ = liftS σ} {γ = a ∷ monENV γ}) !}
+substLem {σ = σ} {t = var x} = substLem' {σ = σ} {x = x}
+substLem {σ = σ} {t = abs t} {γ = γ} ρ {u} a  = {!  (substLem {t = t} {σ = liftS σ} {γ = a ∷ monENV γ}) !}
 -- Goal: EqDEN (⦅ subst (liftS σ) t ⦆ (a ∷ monENV γ))
 --       (⦅ t ⦆ (a ∷ monENV (evalS σ γ)))
 -- Have: EqDEN (⦅ subst (liftS σ) t ⦆ (a ∷ monENV γ))
 --       (⦅ t ⦆ (a ∷ evalS (monSub (wk id) σ) (a ∷ monENV γ)))
 
-substLem {t = app t u} {σ = σ} =
+substLem {σ = σ} {t = app t u} =
   applyEq {a = ⦅  subst σ u  ⦆ _} {f = ⦅  subst σ t ⦆ _ } {f' = ⦅ t ⦆ _}
-   (substLem {t = t} {σ = σ})
-   (substLem {t = u} {σ = σ})
+   (substLem {σ = σ} {t = t})
+   (substLem {σ = σ} {t = u})
 
 -- Completeness.
 

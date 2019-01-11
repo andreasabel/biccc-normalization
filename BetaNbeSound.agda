@@ -41,8 +41,8 @@ variable
 -- Category of order-preserving embeddings (renamings).
 
 data _≤_ : (Γ Δ : Cxt) → Set where
-  id : Γ ≤ Γ
-  wk : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ Δ
+  id   : Γ ≤ Γ
+  wk   : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ Δ
   lift : (ρ : Γ ≤ Δ) → (A ∷ Γ) ≤ (A ∷ Δ)
 
 Mon : (P : Cxt → Set) → Set
@@ -50,18 +50,24 @@ Mon P = ∀{Δ Γ} (ρ : Δ ≤ Γ) → P Γ → P Δ
 
 _•_ : Mon (_≤ Φ)
 id     • ρ       = ρ
-wk ρ   • ρ'      = wk (ρ • ρ')
+wk ρ   • ρ'      = wk   (ρ • ρ')
 lift ρ • id      = lift ρ
-lift ρ • wk ρ'   = wk (ρ • ρ')
+lift ρ • wk ρ'   = wk   (ρ • ρ')
 lift ρ • lift ρ' = lift (ρ • ρ')
 
 variable
-  ρ ρ' : Δ ≤ Γ
+  ρ ρ' ρ'' : Δ ≤ Γ
 
 comp-id : ρ • id ≡ ρ
-comp-id {ρ = id} = refl
-comp-id {ρ = wk ρ} = cong wk comp-id
+comp-id {ρ = id}     = refl
+comp-id {ρ = wk ρ}   = cong wk comp-id
 comp-id {ρ = lift ρ} = refl
+
+-- module _ (ρ : Δ ≤ Γ) where
+comp-assoc : ρ • (ρ' • ρ'') ≡ (ρ • ρ') • ρ''
+comp-assoc {ρ = id} = refl
+comp-assoc {ρ = wk ρ} = cong wk {!!}
+comp-assoc {ρ = lift ρ} = {!!}
 
 -- Var A is a presheaf (monotonicity).
 
@@ -71,13 +77,14 @@ monVar (wk ρ)   x      = vs (monVar ρ x)
 monVar (lift ρ) vz     = vz
 monVar (lift ρ) (vs x) = vs (monVar ρ x)
 
+-- monVar-comp : Forall x ρ ρ' → monVar ρ (monVar ρ' x) ≡ monVar (ρ • ρ') x
 monVar-comp : monVar ρ (monVar ρ' x) ≡ monVar (ρ • ρ') x
-monVar-comp {x = x}    {ρ = id}     {ρ' = ρ'}      = refl
-monVar-comp {x = x}    {ρ = wk ρ}   {ρ' = ρ'}      = cong vs (monVar-comp {ρ = ρ})
-monVar-comp {x = x}    {ρ = lift ρ} {ρ' = id}      = refl
-monVar-comp {x = x}    {ρ = lift ρ} {ρ' = wk ρ'}   = cong vs (monVar-comp {ρ = ρ})
-monVar-comp {x = vz}   {ρ = lift ρ} {ρ' = lift ρ'} = refl
-monVar-comp {x = vs x} {ρ = lift ρ} {ρ' = lift ρ'} = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = id}                               = refl
+monVar-comp {ρ = wk ρ}                             = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = lift ρ} {ρ' = id}                 = refl
+monVar-comp {ρ = lift ρ} {ρ' = wk ρ'}              = cong vs (monVar-comp {ρ = ρ})
+monVar-comp {ρ = lift ρ} {ρ' = lift ρ'} {x = vz}   = refl
+monVar-comp {ρ = lift ρ} {ρ' = lift ρ'} {x = vs x} = cong vs (monVar-comp {ρ = ρ})
 
 -- Terms.
 
@@ -95,7 +102,7 @@ monTm ρ (abs t)   = abs (monTm (lift ρ) t)
 monTm ρ (app t u) = app (monTm ρ t) (monTm ρ u)
 
 monTm-comp : monTm ρ (monTm ρ' t) ≡ monTm (ρ • ρ') t
-monTm-comp {ρ = ρ} {t = var x}   = cong  var (monVar-comp {x = x} {ρ = ρ})
+monTm-comp {ρ = ρ} {t = var x}   = cong  var (monVar-comp {ρ = ρ} {x = x})
 monTm-comp         {t = abs t}   = cong  abs monTm-comp
 monTm-comp         {t = app t u} = cong₂ app monTm-comp monTm-comp
 
@@ -356,3 +363,6 @@ idEnv {Γ = A ∷ Γ} = inj₁ vzNE ∷ monENV idEnv
 nf : (t : Tm A Γ) → NF t
 nf t = reify (Id.subst (⟦ _ ⟧) subst-idS (⦅ t ⦆ idEnv))
   -- REWRITE subst-idS  fails here
+
+-- -}
+-- -}
